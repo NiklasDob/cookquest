@@ -3,11 +3,15 @@
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { X } from "lucide-react"
-import { useState, useMemo } from "react"
+import { useState } from "react"
+import { useQuery } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import { Id } from "@/convex/_generated/dataModel"
 // import { LessonContent } from "./lesson-content" // We'll extract the content logic for cleanliness
 
 interface LessonScreenProps {
   lesson: {
+    id: string
     title: string
     category?: string
   }
@@ -17,7 +21,9 @@ interface LessonScreenProps {
 
 export function LessonScreen({ lesson, onComplete, onBack }: LessonScreenProps) {
   const [currentStep, setCurrentStep] = useState(1)
-  const totalSteps = 5
+  // Fetch content to derive total steps dynamically
+  const content = useQuery(api.myFunctions.getLessonContentByQuest, { questId: lesson.id as unknown as Id<"quests"> })
+  const totalSteps = Math.max(1, (content?.steps?.length ?? 1))
 
   const handleNext = () => {
     if (currentStep < totalSteps) {
@@ -64,7 +70,7 @@ export function LessonScreen({ lesson, onComplete, onBack }: LessonScreenProps) 
             </div>
 
             {/* Lesson Content and Buttons are passed into a separate component for readability */}
-            <LessonContent lesson={lesson} onNext={handleNext} currentStep={currentStep} totalSteps={totalSteps} />
+            <LessonContent lesson={lesson} onNext={handleNext} content={content} currentStep={currentStep} totalSteps={totalSteps} />
         </div>
       </Card>
     </div>
@@ -76,26 +82,29 @@ export function LessonScreen({ lesson, onComplete, onBack }: LessonScreenProps) 
 // `components/lesson-content.tsx`
 
 import { Lightbulb, RotateCcw } from "lucide-react"
-import { useQuery } from "convex/react"
-import { api } from "@/convex/_generated/api"
-import { Id } from "@/convex/_generated/dataModel"
 
 // Define props for the new component
 interface LessonContentProps {
-  lesson: { title: string };
+  lesson: { id: string; title: string };
   onNext: () => void;
+  content?: {
+    _id: Id<"lessonContents">;
+    _creationTime: number;
+    questId: Id<"quests">;
+    emoji: string;
+    heading: string;
+    description: string;
+    steps: string[];
+    hints: string[];
+  } | null;
   currentStep: number;
   totalSteps: number;
 }
 
-export function LessonContent({ lesson, onNext, currentStep, totalSteps }: LessonContentProps) {
-  // Fetch lesson content from Convex by title -> first find quest
-  const quests = useQuery(api.myFunctions.listQuests);
-  const quest = useMemo(() => (quests ?? []).find(q => q.title === lesson.title) as
-    | { _id: Id<"quests">; title: string }
-    | undefined, [quests, lesson.title]);
-  const content = useQuery(api.myFunctions.getLessonContentByQuest, quest ? { questId: quest._id } : "skip");
-
+export function LessonContent({ lesson, onNext, content, currentStep, totalSteps }: LessonContentProps) {
+  
+  const effectiveSteps = content?.steps ?? [];
+  
   return (
     <>
       {/* Main Content Area */}
@@ -110,14 +119,10 @@ export function LessonContent({ lesson, onNext, currentStep, totalSteps }: Lesso
 
         <div className="text-center">
           <h3 className="mb-3 text-3xl font-bold text-white">{content?.heading ?? lesson.title}</h3>
-          <p className="text-pretty text-lg text-muted-foreground">{content?.description ?? "Master this essential cooking skill to progress on your culinary journey."}</p>
-          {content && content.steps?.length > 0 && (
-            <ul className="mt-4 text-left text-base text-muted-foreground list-disc list-inside space-y-1">
-              {content.steps.map((s: string, i: number) => (
-                <li key={i}>{s}</li>
-              ))}
-            </ul>
-          )}
+          <p className="text-pretty text-base text-muted-foreground">{content?.description ?? "Master this essential cooking skill to progress on your culinary journey."}</p>
+          <p className="mt-3 text-pretty text-2xl font-semibold text-white">{effectiveSteps[currentStep - 1]}</p>
+        
+         
         </div>
       </div>
 

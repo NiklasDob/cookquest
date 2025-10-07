@@ -42,6 +42,45 @@ export const listQuests = query({
   },
 });
 
+export const getQuestById = query({
+  args: { questId: v.id("quests") },
+  returns: v.union(
+    v.object({
+      _id: v.id("quests"),
+      _creationTime: v.number(),
+      title: v.string(),
+      type: v.union(
+        v.literal("lesson"),
+        v.literal("challenge"),
+        v.literal("boss"),
+        v.literal("concept"),
+      ),
+      category: v.union(
+        v.literal("foundation"),
+        v.literal("technique"),
+        v.literal("flavor"),
+        v.literal("cuisine"),
+        v.literal("advanced"),
+      ),
+      cuisineType: v.optional(
+        v.union(v.literal("french"), v.literal("asian"), v.literal("italian")),
+      ),
+      status: v.union(
+        v.literal("locked"),
+        v.literal("available"),
+        v.literal("completed"),
+      ),
+      stars: v.number(),
+      maxStars: v.number(),
+      prerequisites: v.array(v.id("quests")),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.questId);
+  },
+});
+
 export const getLessonContentByQuest = query({
   args: { questId: v.id("quests") },
   returns: v.union(
