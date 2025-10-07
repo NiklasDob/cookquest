@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import Dagre from '@dagrejs/dagre';
-import  {
+import {
   ReactFlow,
   Background,
   Edge,
@@ -33,43 +33,32 @@ interface Quest {
   prerequisites: number[]
 }
 
-// --- Your original game data, but WITHOUT the `position` property ---
+// --- Your original game data, WITHOUT the `position` property ---
 const initialQuestNodes: Quest[] = [
   // Foundation Skills
   { id: 1, title: "Knife Safety", type: "lesson", category: "foundation", status: "completed", stars: 3, maxStars: 3, prerequisites: [] },
   { id: 2, title: "Basic Cuts", type: "lesson", category: "foundation", status: "available", stars: 0, maxStars: 3, prerequisites: [1] },
   { id: 3, title: "Measuring", type: "lesson", category: "foundation", status: "locked", stars: 0, maxStars: 3, prerequisites: [1] },
-  // ... PASTE THE REST OF YOUR NODES HERE, making sure to REMOVE the `position` property from all of them
   { id: 4, title: "Salt & Seasoning", type: "concept", category: "flavor", status: "locked", stars: 0, maxStars: 3, prerequisites: [2, 3] },
   { id: 7, title: "Heat Control", type: "lesson", category: "technique", status: "locked", stars: 0, maxStars: 3, prerequisites: [2, 3] },
   { id: 10, title: "Simple Soup", type: "challenge", category: "technique", status: "locked", stars: 0, maxStars: 3, prerequisites: [2, 3] },
   { id: 11, title: "GREATNESS", type: "lesson", category: "technique", status: "locked", stars: 0, maxStars: 3, prerequisites: [10, 3] },
-  // { id: 10, title: "Simple Soup", type: "challenge", category: "technique", status: "locked", stars: 0, maxStars: 3, prerequisites: [2, 3] },
 ];
 
 const nodeTypes = {
   questNode: QuestNodeComponent,
 };
 
-// --- Dagre Layouting Function (based on the official example) ---
-const getLayoutedElements = (nodes: Node<QuestNodeData>[], edges: Edge[], direction: 'TB' | 'LR') => {
+// --- Dagre Layouting Function (Unchanged) ---
+const getLayoutedElements = (nodes: Node[], edges: Edge[], direction: 'TB' | 'LR') => {
   const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: direction, nodesep: 50, ranksep: 80 });
-
-  nodes.forEach((node) => {
-    // Use a fixed size for now, since custom nodes might not report dimensions correctly on the first pass
-    g.setNode(node.id, { ...node, width: 128, height: 128 });
-  });
-
+  nodes.forEach((node) => g.setNode(node.id, { ...node, width: 128, height: 128 }));
   edges.forEach((edge) => g.setEdge(edge.source, edge.target));
-
   Dagre.layout(g);
-
   return {
     nodes: nodes.map((node) => {
       const { x, y } = g.node(node.id);
-      // We are shifting the node position (anchor=center) to the top left
-      // so it matches the React Flow anchor point (top left).
       return { ...node, position: { x: x - 128 / 2, y: y - 128 / 2 } };
     }),
     edges,
@@ -79,95 +68,106 @@ const getLayoutedElements = (nodes: Node<QuestNodeData>[], edges: Edge[], direct
 
 // --- The Main Component that handles the Flow logic ---
 const QuestFlow = () => {
-  // Your original game logic state remains
-  const [questData, setQuestData] = useState<Quest[]>(initialQuestNodes)
-  const [selectedLesson, setSelectedLesson] = useState<Quest | null>(null)
-  const [showReward, setShowReward] = useState(false)
+  const [questData, setQuestData] = useState<Quest[]>(initialQuestNodes);
+  const [selectedLesson, setSelectedLesson] = useState<Quest | null>(null);
+  const [showReward, setShowReward] = useState(false);
 
-  // React Flow state hooks
   const [nodes, setNodes, onNodesChange] = useNodesState<QuestNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const { fitView } = useReactFlow();
+  const isInitialRender = useRef(true);
 
   const handleNodeClick = (nodeData: Quest) => {
     if (nodeData.status !== "locked") {
-      setSelectedLesson(nodeData)
+      setSelectedLesson(nodeData);
     }
-  }
+  };
 
-  // This effect synchronizes your game data (questData) with React Flow's nodes and edges
-  useEffect(() => {
-    // Create nodes with placeholder positions
-    const unpositionedNodes: Node<QuestNodeData>[] = questData.map((quest) => ({
+  // 1. Calculate the stable layout ONCE using useMemo
+  const stableLayout = useMemo(() => {
+    const allNodes = initialQuestNodes.map(quest => ({
       id: quest.id.toString(),
-      type: "questNode",
+      type: "questNode" as const,
       position: { x: 0, y: 0 },
       data: { ...quest, onClick: handleNodeClick },
     }));
 
-    const visibleEdges: Edge[] = [];
-    questData.forEach((targetQuest) => {
-      targetQuest.prerequisites.forEach((prereqId) => {
-        const sourceNode = questData.find((n) => n.id === prereqId);
-        if (sourceNode && sourceNode.status === 'completed') {
-          const isTargetAvailable = targetQuest.status === 'available';
-          const isTargetCompleted = targetQuest.status === 'completed';
-          visibleEdges.push({
-            id: `e-${prereqId}-${targetQuest.id}`,
-            source: prereqId.toString(),
-            target: targetQuest.id.toString(),
-            type: "smoothstep",
-            animated: isTargetAvailable,
-            style: { strokeWidth: 2, stroke: isTargetAvailable || isTargetCompleted ? 'var(--game-green)' : 'rgba(100, 116, 139, 0.4)', strokeDasharray: "6,4", opacity: isTargetAvailable || isTargetCompleted ? 0.8 : 0.5 },
-          });
-        }
+    const allEdges: Edge[] = [];
+    initialQuestNodes.forEach((quest) => {
+      quest.prerequisites.forEach((prereqId) => {
+        allEdges.push({ id: `e-${prereqId}-${quest.id}`, source: prereqId.toString(), target: quest.id.toString() });
       });
     });
 
-    // Run the layout algorithm
-    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-      unpositionedNodes,
-      visibleEdges,
-      'TB' // 'TB' for Top-to-Bottom
-    );
-
-    setNodes(layoutedNodes);
-    setEdges(layoutedEdges);
-
-    // After the layout is set, fit the view
-    window.requestAnimationFrame(() => {
-      fitView();
-    });
-
-  }, [questData, setNodes, setEdges, fitView]); // Re-run whenever the source data changes
+    return getLayoutedElements(allNodes, allEdges, 'TB');
+  }, []); // Empty dependency array means this runs only once
 
   
+  // 2. Synchronize the UI with the current game state
+  useEffect(() => {
+    // Update nodes with the latest status from questData, but keep stable positions
+    const updatedNodes = stableLayout.nodes.map(layoutNode => {
+      const currentQuest = questData.find(q => q.id.toString() === layoutNode.id);
+      return {
+        ...layoutNode,
+        data: {
+          ...layoutNode.data,
+          ...currentQuest,
+        },
+      };
+    });
+
+    // Dynamically filter which edges should be visible
+    const visibleEdges = stableLayout.edges.filter(edge => {
+      const sourceQuest = questData.find(q => q.id.toString() === edge.source);
+      return sourceQuest?.status === 'completed';
+    }).map(edge => {
+      // Add styling to the visible edges
+      const sourceNode = questData.find(n => n.id.toString() === edge.source);
+      const targetNode = questData.find(n => n.id.toString() === edge.target);
+      const isTargetAvailable = targetNode?.status === 'available';
+      const isTargetCompleted = targetNode?.status === 'completed';
+      return {
+        ...edge,
+        type: "smoothstep",
+        animated: isTargetAvailable,
+        style: { strokeWidth: 2, stroke: isTargetAvailable || isTargetCompleted ? 'var(--game-green)' : 'rgba(100, 116, 139, 0.4)', strokeDasharray: "6,4", opacity: isTargetAvailable || isTargetCompleted ? 0.8 : 0.5 },
+      }
+    });
+    
+    setNodes(updatedNodes);
+    setEdges(visibleEdges);
+
+    // if (isInitialRender.current) {
+    //     window.requestAnimationFrame(() => fitView());
+    //     isInitialRender.current = false;
+    // }
+  }, [questData, stableLayout, setNodes, setEdges, fitView]);
+
+
   const handleLessonComplete = () => {
     if (!selectedLesson) return;
-    const updatedQuests = questData.map((node) => 
+    const updatedQuests = questData.map((node) =>
       node.id === selectedLesson.id ? { ...node, status: "completed" as const, stars: 3 } : node
     );
     const finalQuests = updatedQuests.map((node) => {
       if (node.status === "locked") {
-        const allPrereqsCompleted = node.prerequisites.every((prereqId) => 
+        const allPrereqsCompleted = node.prerequisites.every((prereqId) =>
           updatedQuests.find((n) => n.id === prereqId)?.status === "completed"
         );
         if (allPrereqsCompleted) return { ...node, status: "available" as const };
       }
       return node;
     });
-
     setQuestData(finalQuests);
     setSelectedLesson(null);
     setShowReward(true);
   };
 
-
   if (selectedLesson) {
     return <LessonScreen lesson={selectedLesson} onComplete={handleLessonComplete} onBack={() => setSelectedLesson(null)} />;
   }
 
-  // The main return wraps the ReactFlow component
   return (
     <div className="h-full w-full">
       <ReactFlow
@@ -178,7 +178,9 @@ const QuestFlow = () => {
         nodeTypes={nodeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
-        fitView
+        autoPanOnNodeFocus={false}
+        autoPanOnConnect={false}
+        fitView={false}
       >
         <Background color="#4f4f4f" gap={24} variant={"dots"} />
       </ReactFlow>
@@ -187,8 +189,6 @@ const QuestFlow = () => {
   );
 };
 
-
-// --- The final export wraps everything in the ReactFlowProvider ---
 export function QuestMap() {
   return (
     <>
@@ -203,7 +203,7 @@ export function QuestMap() {
           </p>
         </div>
         <div className="mb-6 flex flex-wrap justify-center gap-2">
-          {/* Badges are unchanged */}
+          {/* Badges */}
           <Badge variant="outline" className="border-2 border-[var(--game-green)] bg-[var(--game-green)]/20 text-[var(--game-green)] font-semibold" >
             <div className="mr-1 h-2 w-2 rounded-full bg-[var(--game-green)]" /> Completed
           </Badge>
