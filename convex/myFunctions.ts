@@ -44,7 +44,7 @@ export const listQuests = query({
 
 export const getLessonContentByQuest = query({
   args: { questId: v.id("quests") },
-  returns: v.optional(
+  returns: v.union(
     v.object({
       _id: v.id("lessonContents"),
       _creationTime: v.number(),
@@ -55,6 +55,7 @@ export const getLessonContentByQuest = query({
       steps: v.array(v.string()),
       hints: v.array(v.string()),
     }),
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db
