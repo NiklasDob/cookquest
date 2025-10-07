@@ -88,6 +88,35 @@ export const updateQuestStatus = mutation({
   },
 });
 
+// Complete a quest and unlock dependents whose prerequisites are now satisfied
+export const completeQuestAndUnlockDependents = mutation({
+  args: { questId: v.id("quests"), stars: v.optional(v.number()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const target = await ctx.db.get(args.questId);
+    if (!target) throw new Error("Quest not found");
+
+    // Mark the quest as completed
+    await ctx.db.patch(args.questId, { status: "completed", ...(args.stars !== undefined ? { stars: args.stars } : {}) });
+
+    // Load all quests to compute dependents
+    const all = await ctx.db.query("quests").collect();
+    const isCompleted = (id: Id<"quests">): boolean => {
+      const q = all.find((qq) => qq._id === id);
+      return q?.status === "completed";
+    };
+
+    for (const q of all) {
+      if (q.status !== "locked") continue;
+      const prereqsDone = q.prerequisites.every((pid) => isCompleted(pid) || pid === args.questId);
+      if (prereqsDone) {
+        await ctx.db.patch(q._id, { status: "available" });
+      }
+    }
+    return null;
+  },
+});
+
 // Seed mutation
 export const seedLessons = mutation({
   args: {},

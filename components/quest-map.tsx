@@ -60,7 +60,7 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction: 'TB' | 'LR
 const QuestFlow = () => {
   const convexQuests = useQuery(api.myFunctions.listQuests) as Array<Quest> | undefined
   const seed = useMutation(api.myFunctions.seedLessons)
-  const updateQuestStatus = useMutation(api.myFunctions.updateQuestStatus)
+  const completeQuest = useMutation(api.myFunctions.completeQuestAndUnlockDependents)
 
   const [questData, setQuestData] = useState<Quest[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<QuestNodeData | null>(null);
@@ -173,21 +173,23 @@ const QuestFlow = () => {
     if (!selectedLesson) return;
     const completed = questData.find(q => q.title === selectedLesson.title);
     if (completed) {
-      updateQuestStatus({ questId: completed._id, status: "completed", stars: 3 }).catch(() => undefined);
+      completeQuest({ questId: completed._id, stars: 3 }).catch(() => undefined);
     }
-    const updatedQuests = questData.map((node) =>
-      node.title === selectedLesson.title ? { ...node, status: "completed" as const, stars: 3 } : node
-    );
-    const finalQuests = updatedQuests.map((node) => {
-      if (node.status === "locked") {
-        const allPrereqsCompleted = node.prerequisites.every((prereqId) =>
-          updatedQuests.find((n) => String(n._id) === String(prereqId))?.status === "completed"
-        );
-        if (allPrereqsCompleted) return { ...node, status: "available" as const };
-      }
-      return node;
-    });
-    setQuestData(finalQuests);
+    // Optimistic UI update: mark current as completed and unlock dependents
+    // const completedId = completed?._id;
+    // const optimistic = questData.map((node) =>
+    //   node._id === completedId ? { ...node, status: "completed" as const, stars: 3 } : node
+    // );
+    // const unlocked = optimistic.map((node) => {
+    //   if (node.status === "locked") {
+    //     const allPrereqsCompleted = node.prerequisites.every((prereqId) =>
+    //       optimistic.find((n) => String(n._id) === String(prereqId))?.status === "completed"
+    //     );
+    //     if (allPrereqsCompleted) return { ...node, status: "available" as const };
+    //   }
+    //   return node;
+    // });
+    // setQuestData(unlocked);
     setSelectedLesson(null);
     setShowReward(true);
   };
