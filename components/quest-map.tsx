@@ -373,6 +373,7 @@ const getPosition = (top: string, left: string, containerWidth: number, containe
   return { x: leftPercent * containerWidth - 64, y: topPercent * containerHeight - 64 }
 }
 
+// Function to transform your game data into React Flow's format
 const transformDataForFlow = (
   quests: Quest[],
   onClick: (data: QuestNodeData) => void,
@@ -423,7 +424,6 @@ const transformDataForFlow = (
 
   return { nodes, edges }
 }
-
 export function QuestMap() {
   // Your original game state
   const [questData, setQuestData] = useState<Quest[]>(initialQuestNodes)
