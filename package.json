@@ -9,7 +9,8 @@
     "predev": "convex dev --until-success",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "dashboard": "convex dashboard"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.25.0",
