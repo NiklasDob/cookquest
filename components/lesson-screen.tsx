@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { X } from "lucide-react"
 import { useState } from "react"
-import { LessonContent } from "./lesson-content" // We'll extract the content logic for cleanliness
+// import { LessonContent } from "./lesson-content" // We'll extract the content logic for cleanliness
 
 interface LessonScreenProps {
   lesson: {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import Dagre from '@dagrejs/dagre';
 import {
   ReactFlow,
@@ -11,10 +11,11 @@ import {
   useEdgesState,
   ReactFlowProvider,
   useReactFlow,
+  Panel,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 
-import { Lock, Star } from "lucide-react"
+import { Lock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { LessonScreen } from "@/components/lesson-screen"
 import { RewardPopup } from "@/components/reward-popup"
@@ -65,7 +66,6 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction: 'TB' | 'LR
   };
 };
 
-
 // --- The Main Component that handles the Flow logic ---
 const QuestFlow = () => {
   const [questData, setQuestData] = useState<Quest[]>(initialQuestNodes);
@@ -75,11 +75,13 @@ const QuestFlow = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState<QuestNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const { fitView } = useReactFlow();
-  const isInitialRender = useRef(true);
 
-  const handleNodeClick = (nodeData: Quest) => {
-    if (nodeData.status !== "locked") {
-      setSelectedLesson(nodeData);
+  // Ref to store the previous quest data to detect changes
+  const prevQuestDataRef = useRef(questData);
+
+  const handleNodeClick = (_event: React.MouseEvent, node: Node<QuestNodeData>) => {
+    if (node.data.status !== "locked") {
+      setSelectedLesson(node.data);
     }
   };
 
@@ -100,30 +102,21 @@ const QuestFlow = () => {
     });
 
     return getLayoutedElements(allNodes, allEdges, 'TB');
-  }, []); // Empty dependency array means this runs only once
+  }, []);
 
-  
-  // 2. Synchronize the UI with the current game state
+  // 2. Synchronize the UI and trigger animations
   useEffect(() => {
-    // Update nodes with the latest status from questData, but keep stable positions
+    const previousQuestData = prevQuestDataRef.current;
+
     const updatedNodes = stableLayout.nodes.map(layoutNode => {
       const currentQuest = questData.find(q => q.id.toString() === layoutNode.id);
-      return {
-        ...layoutNode,
-        data: {
-          ...layoutNode.data,
-          ...currentQuest,
-        },
-      };
+      return { ...layoutNode, data: { ...layoutNode.data, ...currentQuest } };
     });
 
-    // Dynamically filter which edges should be visible
     const visibleEdges = stableLayout.edges.filter(edge => {
       const sourceQuest = questData.find(q => q.id.toString() === edge.source);
       return sourceQuest?.status === 'completed';
     }).map(edge => {
-      // Add styling to the visible edges
-      const sourceNode = questData.find(n => n.id.toString() === edge.source);
       const targetNode = questData.find(n => n.id.toString() === edge.target);
       const isTargetAvailable = targetNode?.status === 'available';
       const isTargetCompleted = targetNode?.status === 'completed';
@@ -132,18 +125,39 @@ const QuestFlow = () => {
         type: "smoothstep",
         animated: isTargetAvailable,
         style: { strokeWidth: 2, stroke: isTargetAvailable || isTargetCompleted ? 'var(--game-green)' : 'rgba(100, 116, 139, 0.4)', strokeDasharray: "6,4", opacity: isTargetAvailable || isTargetCompleted ? 0.8 : 0.5 },
-      }
+      };
     });
-    
+
     setNodes(updatedNodes);
     setEdges(visibleEdges);
 
-    // if (isInitialRender.current) {
-    //     window.requestAnimationFrame(() => fitView());
-    //     isInitialRender.current = false;
-    // }
+    // --- Animation Logic ---
+    const newlyAvailableNodes = questData.filter(currentQuest => {
+      const prevQuest = previousQuestData.find(q => q.id === currentQuest.id);
+      return prevQuest && prevQuest.status === 'locked' && currentQuest.status === 'available';
+    });
+
+    if (newlyAvailableNodes.length > 0) {
+      const nodeIds = newlyAvailableNodes.map(n => n.id.toString());
+      setTimeout(() => {
+        fitView({
+          nodes: nodeIds.map(id => ({ id })),
+          duration: 800,
+          padding: 0.2,
+          maxZoom: 1.2,
+        });
+      }, 100);
+    }
+
+    // Update the ref for the next render
+    prevQuestDataRef.current = questData;
+
   }, [questData, stableLayout, setNodes, setEdges, fitView]);
 
+  // Fit view on initial load
+  useEffect(() => {
+    fitView({ duration: 200 });
+  }, [fitView]);
 
   const handleLessonComplete = () => {
     if (!selectedLesson) return;
@@ -175,14 +189,19 @@ const QuestFlow = () => {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeClick={handleNodeClick}
         nodeTypes={nodeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
-        autoPanOnNodeFocus={false}
-        autoPanOnConnect={false}
-        fitView={false}
+        fitView
+        fitViewOptions={{ padding: 0.1 }}
       >
         <Background color="#4f4f4f" gap={24} variant={"dots"} />
+        <Panel position="top-right">
+          <button onClick={() => fitView({ duration: 600 })} className="rounded bg-gray-700 px-2 py-1 text-white">
+            Center View
+          </button>
+        </Panel>
       </ReactFlow>
       {showReward && <RewardPopup onClose={() => setShowReward(false)} />}
     </div>
@@ -215,7 +234,7 @@ export function QuestMap() {
           </Badge>
         </div>
 
-        <div className="relative mx-auto h-[1200px] max-w-6xl rounded-lg border border-white/10 bg-[#001404]">
+        <div className="relative mx-auto h-128 max-w-6xl rounded-lg border border-white/10 bg-[#001404]">
           <ReactFlowProvider>
             <QuestFlow />
           </ReactFlowProvider>
