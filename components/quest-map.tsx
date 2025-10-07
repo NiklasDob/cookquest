@@ -1,14 +1,27 @@
 "use client"
 
-import { Star, Lock, Crown, ChefHat, Flame, Sparkles, Globe, Wine, UtensilsCrossed } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { useState, useCallback, useMemo, useEffect } from "react"
+import {
+  ReactFlow,
+  Background,
+  Edge,
+  Node,
+  applyNodeChanges,
+  applyEdgeChanges,
+  NodeChange,
+  EdgeChange,
+} from "@xyflow/react"
+// Changed: CSS import path
+import "@xyflow/react/dist/style.css"
+
+import { Lock, Star } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { useState } from "react"
 import { LessonScreen } from "@/components/lesson-screen"
 import { RewardPopup } from "@/components/reward-popup"
+import QuestNodeComponent, { QuestNodeData } from "./quest-node"
 
-interface QuestNode {
+// Your original data structure and initial data
+interface Quest {
   id: number
   title: string
   type: "lesson" | "challenge" | "boss" | "concept"
@@ -20,7 +33,6 @@ interface QuestNode {
   position: { top: string; left: string }
   prerequisites: number[]
 }
-
 const initialQuestNodes: QuestNode[] = [
   // Foundation Skills - Only first one unlocked
   {
@@ -350,40 +362,115 @@ const initialQuestNodes: QuestNode[] = [
   },
 ]
 
-function getNodeIcon(node: QuestNode) {
-  if (node.status === "locked") return <Lock className="h-8 w-8 text-muted-foreground/50" />
-  if (node.type === "boss") return <Crown className="h-10 w-10" />
-  if (node.type === "concept") return <Sparkles className="h-8 w-8" />
-  if (node.type === "challenge") return <Flame className="h-8 w-8" />
-  if (node.category === "cuisine") {
-    if (node.cuisineType === "french") return <Wine className="h-8 w-8" />
-    if (node.cuisineType === "italian") return <UtensilsCrossed className="h-8 w-8" />
-    return <Globe className="h-8 w-8" />
-  }
-  return <ChefHat className="h-8 w-8" />
+
+const nodeTypes = {
+  questNode: QuestNodeComponent,
+}
+
+const getPosition = (top: string, left: string, containerWidth: number, containerHeight: number) => {
+  const topPercent = parseFloat(top) / 100
+  const leftPercent = parseFloat(left) / 100
+  return { x: leftPercent * containerWidth - 64, y: topPercent * containerHeight - 64 }
+}
+
+const transformDataForFlow = (
+  quests: Quest[],
+  onClick: (data: QuestNodeData) => void,
+): { nodes: Node<QuestNodeData>[]; edges: Edge[] } => {
+  const containerWidth = 1024
+  const containerHeight = 1200
+
+  // Node creation logic remains the same
+  const nodes: Node<QuestNodeData>[] = quests.map((quest) => ({
+    id: quest.id.toString(),
+    type: "questNode",
+    position: getPosition(quest.position.top, quest.position.left, containerWidth, containerHeight),
+    data: { ...quest, onClick },
+    draggable: false,
+    connectable: false,
+  }))
+
+  const edges: Edge[] = []
+  quests.forEach((targetQuest) => {
+    targetQuest.prerequisites.forEach((prereqId) => {
+      const sourceNode = quests.find((n) => n.id === prereqId)
+
+      // **NEW LOGIC**: Only draw an edge if the source node is completed.
+      if (sourceNode && sourceNode.status === 'completed') {
+        const isTargetAvailable = targetQuest.status === 'available';
+        const isTargetCompleted = targetQuest.status === 'completed';
+
+        edges.push({
+          id: `e-${prereqId}-${targetQuest.id}`,
+          source: prereqId.toString(),
+          target: targetQuest.id.toString(),
+          type: "smoothstep",
+          // Animate the line only if the next quest is newly available
+          animated: isTargetAvailable,
+          style: {
+            strokeWidth: 2,
+            // If the next quest is unlocked or done, use a bright color. Otherwise, use a faint color for locked paths.
+            stroke: isTargetAvailable || isTargetCompleted 
+              ? 'var(--game-green)' 
+              : 'rgba(100, 116, 139, 0.4)', // Faded color for visible but locked paths
+            strokeDasharray: "6,4",
+            opacity: isTargetAvailable || isTargetCompleted ? 0.8 : 0.5,
+          },
+        })
+      }
+    })
+  })
+
+  return { nodes, edges }
 }
 
 export function QuestMap() {
-  const [questNodes, setQuestNodes] = useState<QuestNode[]>(initialQuestNodes)
-  const [selectedLesson, setSelectedLesson] = useState<QuestNode | null>(null)
+  // Your original game state
+  const [questData, setQuestData] = useState<Quest[]>(initialQuestNodes)
+  const [selectedLesson, setSelectedLesson] = useState<Quest | null>(null)
   const [showReward, setShowReward] = useState(false)
+
+  // New: State management for React Flow nodes and edges
+  const [nodes, setNodes] = useState<Node<QuestNodeData>[]>([])
+  const [edges, setEdges] = useState<Edge[]>([])
+
+  const handleNodeClick = (nodeData: Quest) => {
+    if (nodeData.status !== "locked") {
+      setSelectedLesson(nodeData)
+    }
+  }
+
+  // New: useEffect to synchronize your game state with the React Flow state
+  useEffect(() => {
+    const { nodes: newNodes, edges: newEdges } = transformDataForFlow(questData, handleNodeClick)
+    setNodes(newNodes)
+    setEdges(newEdges)
+  }, [questData]) // This effect runs whenever your questData changes
+
+  // New: Required handlers for React Flow v12+
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
+    [setNodes],
+  )
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
+    [setEdges],
+  )
 
   const handleLessonComplete = () => {
     if (!selectedLesson) return
 
-    // Update the completed lesson
-    const updatedNodes = questNodes.map((node) => {
+    const updatedQuests = questData.map((node) => {
       if (node.id === selectedLesson.id) {
         return { ...node, status: "completed" as const, stars: 3 }
       }
       return node
     })
 
-    // Unlock nodes that have all prerequisites completed
-    const finalNodes = updatedNodes.map((node) => {
+    const finalQuests = updatedQuests.map((node) => {
       if (node.status === "locked") {
         const allPrereqsCompleted = node.prerequisites.every((prereqId) => {
-          const prereqNode = updatedNodes.find((n) => n.id === prereqId)
+          const prereqNode = updatedQuests.find((n) => n.id === prereqId)
           return prereqNode?.status === "completed"
         })
         if (allPrereqsCompleted) {
@@ -393,7 +480,8 @@ export function QuestMap() {
       return node
     })
 
-    setQuestNodes(finalNodes)
+    // This single state update will trigger the useEffect to update the flow
+    setQuestData(finalQuests)
     setSelectedLesson(null)
     setShowReward(true)
   }
@@ -417,6 +505,7 @@ export function QuestMap() {
         </div>
 
         <div className="mb-6 flex flex-wrap justify-center gap-2">
+          {/* Badges are unchanged */}
           <Badge
             variant="outline"
             className="border-2 border-[var(--game-green)] bg-[var(--game-green)]/20 text-[var(--game-green)] font-semibold"
@@ -437,163 +526,19 @@ export function QuestMap() {
           </Badge>
         </div>
 
-        <div className="relative mx-auto h-[1200px] max-w-5xl">
-          {/* Path lines */}
-          <svg className="absolute inset-0 h-full w-full" style={{ zIndex: 0 }}>
-            <defs>
-              <linearGradient id="pathGradient1" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" style={{ stopColor: "var(--game-green)", stopOpacity: 0.4 }} />
-                <stop offset="100%" style={{ stopColor: "var(--game-yellow)", stopOpacity: 0.4 }} />
-              </linearGradient>
-              <linearGradient id="pathGradient2" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" style={{ stopColor: "var(--game-orange)", stopOpacity: 0.4 }} />
-                <stop offset="100%" style={{ stopColor: "var(--game-terracotta)", stopOpacity: 0.4 }} />
-              </linearGradient>
-              <linearGradient id="pathGradient3" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" style={{ stopColor: "var(--game-teal)", stopOpacity: 0.4 }} />
-                <stop offset="100%" style={{ stopColor: "var(--game-purple)", stopOpacity: 0.4 }} />
-              </linearGradient>
-            </defs>
-            {/* Path definitions... */}
-            <path
-              d="M 50% 3% L 40% 10% M 50% 3% L 60% 10%"
-              fill="none"
-              stroke="url(#pathGradient1)"
-              strokeWidth="3"
-              strokeDasharray="6,4"
-            />
-            <path
-              d="M 40% 10% L 25% 18% L 20% 26% L 25% 34%"
-              fill="none"
-              stroke="url(#pathGradient1)"
-              strokeWidth="3"
-              strokeDasharray="6,4"
-            />
-            <path
-              d="M 40% 10% L 50% 18% M 60% 10% L 50% 18%"
-              fill="none"
-              stroke="url(#pathGradient2)"
-              strokeWidth="3"
-              strokeDasharray="6,4"
-            />
-            <path
-              d="M 60% 10% L 75% 18% L 80% 26%"
-              fill="none"
-              stroke="url(#pathGradient3)"
-              strokeWidth="3"
-              strokeDasharray="6,4"
-            />
-            <path
-              d="M 50% 18% L 45% 26% M 50% 18% L 55% 26%"
-              fill="none"
-              stroke="url(#pathGradient2)"
-              strokeWidth="3"
-              strokeDasharray="6,4"
-            />
-            <path
-              d="M 25% 34% L 50% 42% M 45% 26% L 50% 42% M 55% 26% L 50% 42%"
-              fill="none"
-              stroke="url(#pathGradient1)"
-              strokeWidth="3"
-              strokeDasharray="6,4"
-            />
-            <path
-              d="M 50% 42% L 45% 50% M 50% 42% L 55% 50%"
-              fill="none"
-              stroke="url(#pathGradient2)"
-              strokeWidth="3"
-              strokeDasharray="6,4"
-            />
-            <path
-              d="M 45% 50% L 20% 60% L 15% 68% L 20% 76% L 15% 84%"
-              fill="none"
-              stroke="url(#pathGradient2)"
-              strokeWidth="3"
-              strokeDasharray="6,4"
-            />
-            <path
-              d="M 50% 42% L 50% 60% L 45% 68% L 50% 76% L 45% 84%"
-              fill="none"
-              stroke="url(#pathGradient3)"
-              strokeWidth="3"
-              strokeDasharray="6,4"
-            />
-            <path
-              d="M 55% 50% L 80% 60% L 85% 68% L 80% 76% L 85% 84%"
-              fill="none"
-              stroke="url(#pathGradient1)"
-              strokeWidth="3"
-              strokeDasharray="6,4"
-            />
-            <path
-              d="M 15% 84% L 50% 94% M 45% 84% L 50% 94% M 85% 84% L 50% 94%"
-              fill="none"
-              stroke="url(#pathGradient2)"
-              strokeWidth="4"
-              strokeDasharray="6,4"
-            />
-          </svg>
-
-          {/* Quest Nodes */}
-          {questNodes.map((node) => {
-            const isDisabled = node.status === "locked"
-            let iconColor = "var(--muted-foreground)"
-            if (node.status === "completed") iconColor = "var(--game-green)"
-            if (node.status === "available") iconColor = "var(--game-yellow)"
-
-            return (
-              <div
-                key={node.id}
-                className="absolute -translate-x-1/2 -translate-y-1/2"
-                style={{ top: node.position.top, left: node.position.left, zIndex: 1 }}
-              >
-                <Button
-                  variant="ghost"
-                  className="h-auto w-auto p-0"
-                  disabled={isDisabled}
-                  onClick={() => node.status !== "locked" && setSelectedLesson(node)}
-                >
-                  <Card
-                    className={`relative flex h-28 w-28 flex-col items-center justify-center gap-1.5 border-4 transition-all ${
-                      isDisabled
-                        ? "border-muted/40 bg-muted/15 opacity-60"
-                        : node.status === "completed"
-                          ? "border-[var(--game-green)] bg-gradient-to-br from-[var(--game-green)]/30 to-[var(--game-sage)]/20 shadow-lg shadow-[var(--game-green)]/40"
-                          : node.status === "available"
-                            ? "border-[var(--game-yellow)] bg-gradient-to-br from-[var(--game-yellow)]/30 to-[var(--game-orange)]/20 shadow-xl shadow-[var(--game-yellow)]/50 hover:scale-110 hover:shadow-2xl hover:shadow-[var(--game-yellow)]/60"
-                            : "bg-card/80"
-                    } ${node.type === "boss" && !isDisabled ? "h-32 w-32 border-[var(--game-terracotta)] bg-gradient-to-br from-[var(--game-terracotta)]/50 to-[var(--game-orange)]/30 shadow-2xl shadow-[var(--game-terracotta)]/50 animate-pulse" : ""}`}
-                  >
-                    <div style={{ color: iconColor }}>{getNodeIcon(node)}</div>
-
-                    <span
-                      className="px-1 text-center text-[10px] font-bold leading-tight"
-                      style={{
-                        color: isDisabled ? "var(--muted-foreground)" : "var(--game-cream)",
-                      }}
-                    >
-                      {node.title}
-                    </span>
-
-                    {!isDisabled && (
-                      <div className="flex gap-0.5">
-                        {Array.from({ length: node.maxStars }).map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`h-2.5 w-2.5 ${
-                              i < node.stars
-                                ? "fill-[var(--game-yellow)] text-[var(--game-yellow)] drop-shadow-[0_0_4px_var(--game-yellow)]"
-                                : "text-muted-foreground/40"
-                            }`}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </Card>
-                </Button>
-              </div>
-            )
-          })}
+        <div className="relative mx-auto h-[1200px] max-w-5xl rounded-lg border border-white/10 bg-[#001404]">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            nodeTypes={nodeTypes}
+            zoomOnScroll={false}
+            panOnDrag={false}
+            fitView
+          >
+            <Background color="#4f4f4f" gap={24} variant={"dots"} />
+          </ReactFlow>
         </div>
       </div>
 
