@@ -12,6 +12,7 @@ import {
   ReactFlowProvider,
   useReactFlow,
   Panel,
+  type NodeTypes,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 
@@ -20,35 +21,24 @@ import { Badge } from "@/components/ui/badge"
 import { LessonScreen } from "@/components/lesson-screen"
 import { RewardPopup } from "@/components/reward-popup"
 import QuestNodeComponent, { QuestNodeData } from "./quest-node"
+import { api } from "@/convex/_generated/api"
+import { useMutation, useQuery } from "convex/react"
+import { Id } from "@/convex/_generated/dataModel"
 
-// --- The Quest interface is simpler (no position) ---
+// --- The Quest interface mirrors the DB ---
 interface Quest {
-  id: number
+  _id: Id<"quests">
   title: string
   type: "lesson" | "challenge" | "boss" | "concept"
   category: "foundation" | "technique" | "flavor" | "cuisine" | "advanced"
   cuisineType?: "french" | "asian" | "italian"
   status: "locked" | "available" | "completed"
   stars: number
-  maxStars: 3
-  prerequisites: number[]
+  maxStars: number
+  prerequisites: Array<Id<"quests">>
 }
 
-// --- Your original game data, WITHOUT the `position` property ---
-const initialQuestNodes: Quest[] = [
-  // Foundation Skills
-  { id: 1, title: "Knife Safety", type: "lesson", category: "foundation", status: "completed", stars: 3, maxStars: 3, prerequisites: [] },
-  { id: 2, title: "Basic Cuts", type: "lesson", category: "foundation", status: "available", stars: 0, maxStars: 3, prerequisites: [1] },
-  { id: 3, title: "Measuring", type: "lesson", category: "foundation", status: "locked", stars: 0, maxStars: 3, prerequisites: [1] },
-  { id: 4, title: "Salt & Seasoning", type: "concept", category: "flavor", status: "locked", stars: 0, maxStars: 3, prerequisites: [2, 3] },
-  { id: 7, title: "Heat Control", type: "lesson", category: "technique", status: "locked", stars: 0, maxStars: 3, prerequisites: [2, 3] },
-  { id: 10, title: "Simple Soup", type: "challenge", category: "technique", status: "locked", stars: 0, maxStars: 3, prerequisites: [2, 3] },
-  { id: 11, title: "GREATNESS", type: "lesson", category: "technique", status: "locked", stars: 0, maxStars: 3, prerequisites: [10, 3] },
-];
-
-const nodeTypes = {
-  questNode: QuestNodeComponent,
-};
+const nodeTypes = { questNode: QuestNodeComponent } as unknown as NodeTypes;
 
 // --- Dagre Layouting Function (Unchanged) ---
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction: 'TB' | 'LR') => {
@@ -68,56 +58,76 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction: 'TB' | 'LR
 
 // --- The Main Component that handles the Flow logic ---
 const QuestFlow = () => {
-  const [questData, setQuestData] = useState<Quest[]>(initialQuestNodes);
-  const [selectedLesson, setSelectedLesson] = useState<Quest | null>(null);
+  const convexQuests = useQuery(api.myFunctions.listQuests) as Array<Quest> | undefined
+  const seed = useMutation(api.myFunctions.seedLessons)
+  const updateQuestStatus = useMutation(api.myFunctions.updateQuestStatus)
+
+  const [questData, setQuestData] = useState<Quest[]>([]);
+  const [selectedLesson, setSelectedLesson] = useState<QuestNodeData | null>(null);
   const [showReward, setShowReward] = useState(false);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<QuestNodeData>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
   const { fitView } = useReactFlow();
 
   // Ref to store the previous quest data to detect changes
   const prevQuestDataRef = useRef(questData);
 
-  const handleNodeClick = (_event: React.MouseEvent, node: Node<QuestNodeData>) => {
+  const handleNodeClick = (_event: React.MouseEvent, node: Node) => {
     if (node.data.status !== "locked") {
-      setSelectedLesson(node.data);
+      setSelectedLesson(node.data as unknown as QuestNodeData);
     }
   };
 
-  // 1. Calculate the stable layout ONCE using useMemo
+  // Load quests from Convex into local state and seed if needed
+  useEffect(() => {
+    if (convexQuests === undefined) return;
+    if (convexQuests.length === 0) {
+      seed({}).catch(() => undefined);
+      return;
+    }
+    setQuestData(convexQuests);
+  }, [convexQuests, seed]);
+
+  // 1. Calculate the stable layout from current data
   const stableLayout = useMemo(() => {
-    const allNodes = initialQuestNodes.map(quest => ({
-      id: quest.id.toString(),
+    const allNodes: Array<Node> = questData.map(quest => ({
+      id: String(quest._id),
       type: "questNode" as const,
       position: { x: 0, y: 0 },
-      data: { ...quest, onClick: handleNodeClick },
+      data: {
+        ...quest,
+        id: String(quest._id),
+        maxStars: 3,
+        prerequisites: quest.prerequisites.map((p) => String(p)),
+        onClick: (d: QuestNodeData) => handleNodeClick({} as React.MouseEvent, { id: d.id, position: { x: 0, y: 0 }, data: d } as unknown as Node),
+      } as unknown as Record<string, unknown>,
     }));
 
     const allEdges: Edge[] = [];
-    initialQuestNodes.forEach((quest) => {
+    questData.forEach((quest) => {
       quest.prerequisites.forEach((prereqId) => {
-        allEdges.push({ id: `e-${prereqId}-${quest.id}`, source: prereqId.toString(), target: quest.id.toString() });
+        allEdges.push({ id: `e-${String(prereqId)}-${String(quest._id)}`, source: String(prereqId), target: String(quest._id) });
       });
     });
 
     return getLayoutedElements(allNodes, allEdges, 'TB');
-  }, []);
+  }, [questData]);
 
   // 2. Synchronize the UI and trigger animations
   useEffect(() => {
     const previousQuestData = prevQuestDataRef.current;
 
     const updatedNodes = stableLayout.nodes.map(layoutNode => {
-      const currentQuest = questData.find(q => q.id.toString() === layoutNode.id);
-      return { ...layoutNode, data: { ...layoutNode.data, ...currentQuest } };
+      const currentQuest = questData.find(q => String(q._id) === layoutNode.id);
+      return { ...layoutNode, data: { ...(layoutNode.data as Record<string, unknown>), ...(currentQuest ? { ...currentQuest, id: String(currentQuest._id), maxStars: 3, prerequisites: currentQuest.prerequisites.map(p => String(p)) } : {}) } } as Node;
     });
 
     const visibleEdges = stableLayout.edges.filter(edge => {
-      const sourceQuest = questData.find(q => q.id.toString() === edge.source);
+      const sourceQuest = questData.find(q => String(q._id) === edge.source);
       return sourceQuest?.status === 'completed';
     }).map(edge => {
-      const targetNode = questData.find(n => n.id.toString() === edge.target);
+      const targetNode = questData.find(n => String(n._id) === edge.target);
       const isTargetAvailable = targetNode?.status === 'available';
       const isTargetCompleted = targetNode?.status === 'completed';
       return {
@@ -128,17 +138,17 @@ const QuestFlow = () => {
       };
     });
 
-    setNodes(updatedNodes);
-    setEdges(visibleEdges);
+    setNodes(updatedNodes as Array<Node>);
+    setEdges(visibleEdges as Array<Edge>);
 
     // --- Animation Logic ---
     const newlyAvailableNodes = questData.filter(currentQuest => {
-      const prevQuest = previousQuestData.find(q => q.id === currentQuest.id);
+      const prevQuest = previousQuestData.find(q => String(q._id) === String(currentQuest._id));
       return prevQuest && prevQuest.status === 'locked' && currentQuest.status === 'available';
     });
 
     if (newlyAvailableNodes.length > 0) {
-      const nodeIds = newlyAvailableNodes.map(n => n.id.toString());
+      const nodeIds = newlyAvailableNodes.map(n => String(n._id));
       setTimeout(() => {
         fitView({
           nodes: nodeIds.map(id => ({ id })),
@@ -161,13 +171,17 @@ const QuestFlow = () => {
 
   const handleLessonComplete = () => {
     if (!selectedLesson) return;
+    const completed = questData.find(q => q.title === selectedLesson.title);
+    if (completed) {
+      updateQuestStatus({ questId: completed._id, status: "completed", stars: 3 }).catch(() => undefined);
+    }
     const updatedQuests = questData.map((node) =>
-      node.id === selectedLesson.id ? { ...node, status: "completed" as const, stars: 3 } : node
+      node.title === selectedLesson.title ? { ...node, status: "completed" as const, stars: 3 } : node
     );
     const finalQuests = updatedQuests.map((node) => {
       if (node.status === "locked") {
         const allPrereqsCompleted = node.prerequisites.every((prereqId) =>
-          updatedQuests.find((n) => n.id === prereqId)?.status === "completed"
+          updatedQuests.find((n) => String(n._id) === String(prereqId))?.status === "completed"
         );
         if (allPrereqsCompleted) return { ...node, status: "available" as const };
       }
@@ -179,7 +193,7 @@ const QuestFlow = () => {
   };
 
   if (selectedLesson) {
-    return <LessonScreen lesson={selectedLesson} onComplete={handleLessonComplete} onBack={() => setSelectedLesson(null)} />;
+    return <LessonScreen lesson={{ title: selectedLesson.title }} onComplete={handleLessonComplete} onBack={() => setSelectedLesson(null)} />;
   }
 
   return (
@@ -196,7 +210,7 @@ const QuestFlow = () => {
         fitView
         fitViewOptions={{ padding: 0.1 }}
       >
-        <Background color="#4f4f4f" gap={24} variant={"dots"} />
+        <Background color="#4f4f4f" gap={24} />
         <Panel position="top-right">
           <button onClick={() => fitView({ duration: 600 })} className="rounded bg-gray-700 px-2 py-1 text-white">
             Center View

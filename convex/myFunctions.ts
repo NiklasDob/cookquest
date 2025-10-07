@@ -1,78 +1,269 @@
 import { v } from "convex/values";
-import { query, mutation, action } from "./_generated/server";
-import { api } from "./_generated/api";
+import { query, mutation } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 
-// Write your Convex functions in any file inside this directory (`convex`).
-// See https://docs.convex.dev/functions for more.
-
-// You can read data from the database via a query:
-export const listNumbers = query({
-  // Validators for arguments.
-  args: {
-    count: v.number(),
+// Queries
+export const listQuests = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("quests"),
+      _creationTime: v.number(),
+      title: v.string(),
+      type: v.union(
+        v.literal("lesson"),
+        v.literal("challenge"),
+        v.literal("boss"),
+        v.literal("concept"),
+      ),
+      category: v.union(
+        v.literal("foundation"),
+        v.literal("technique"),
+        v.literal("flavor"),
+        v.literal("cuisine"),
+        v.literal("advanced"),
+      ),
+      cuisineType: v.optional(
+        v.union(v.literal("french"), v.literal("asian"), v.literal("italian")),
+      ),
+      status: v.union(
+        v.literal("locked"),
+        v.literal("available"),
+        v.literal("completed"),
+      ),
+      stars: v.number(),
+      maxStars: v.number(),
+      prerequisites: v.array(v.id("quests")),
+    }),
+  ),
+  handler: async (ctx) => {
+    const quests = await ctx.db.query("quests").order("asc").collect();
+    return quests;
   },
+});
 
-  // Query implementation.
+export const getLessonContentByQuest = query({
+  args: { questId: v.id("quests") },
+  returns: v.optional(
+    v.object({
+      _id: v.id("lessonContents"),
+      _creationTime: v.number(),
+      questId: v.id("quests"),
+      emoji: v.string(),
+      heading: v.string(),
+      description: v.string(),
+      steps: v.array(v.string()),
+      hints: v.array(v.string()),
+    }),
+  ),
   handler: async (ctx, args) => {
-    //// Read the database as many times as you need here.
-    //// See https://docs.convex.dev/database/reading-data.
-    const numbers = await ctx.db
-      .query("numbers")
-      // Ordered by _creationTime, return most recent
-      .order("desc")
-      .take(args.count);
-    return {
-      viewer: (await ctx.auth.getUserIdentity())?.name ?? null,
-      numbers: numbers.reverse().map((number) => number.value),
+    return await ctx.db
+      .query("lessonContents")
+      .withIndex("by_quest", (q) => q.eq("questId", args.questId))
+      .unique();
+  },
+});
+
+// Mutations
+export const updateQuestStatus = mutation({
+  args: {
+    questId: v.id("quests"),
+    status: v.union(
+      v.literal("locked"),
+      v.literal("available"),
+      v.literal("completed"),
+    ),
+    stars: v.optional(v.number()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const quest = await ctx.db.get(args.questId);
+    if (!quest) throw new Error("Quest not found");
+    await ctx.db.patch(args.questId, {
+      status: args.status,
+      ...(typeof args.stars === "number" ? { stars: args.stars } : {}),
+    });
+    return null;
+  },
+});
+
+// Seed mutation
+export const seedLessons = mutation({
+  args: {},
+  returns: v.object({ inserted: v.number() }),
+  handler: async (ctx) => {
+    // Avoid duplicate seeding
+    const existing = await ctx.db.query("quests").take(1);
+    if (existing.length > 0) return { inserted: 0 };
+
+    // Insert quests (ids captured to wire prerequisites)
+    const questIdByTitle: Record<string, Id<"quests">> = {};
+
+    const insertQuest = async (
+      title: string,
+      type: "lesson" | "challenge" | "boss" | "concept",
+      category: "foundation" | "technique" | "flavor" | "cuisine" | "advanced",
+      status: "locked" | "available" | "completed",
+      stars: number,
+      maxStars: number,
+    ) => {
+      const id = await ctx.db.insert("quests", {
+        title,
+        type,
+        category,
+        status,
+        stars,
+        maxStars,
+        prerequisites: [],
+      });
+      questIdByTitle[title] = id;
+      return id;
     };
-  },
-});
 
-// You can write data to the database via a mutation:
-export const addNumber = mutation({
-  // Validators for arguments.
-  args: {
-    value: v.number(),
-  },
+    // Create base quests
+    const knifeSafety = await insertQuest("Knife Safety", "lesson", "foundation", "completed", 3, 3);
+    const basicCuts = await insertQuest("Basic Cuts", "lesson", "foundation", "available", 0, 3);
+    const measuring = await insertQuest("Measuring", "lesson", "foundation", "locked", 0, 3);
+    const saltSeasoning = await insertQuest("Salt & Seasoning", "concept", "flavor", "locked", 0, 3);
+    const heatControl = await insertQuest("Heat Control", "lesson", "technique", "locked", 0, 3);
+    const simpleSoup = await insertQuest("Simple Soup", "challenge", "technique", "locked", 0, 3);
+    const greatness = await insertQuest("GREATNESS", "lesson", "technique", "locked", 0, 3);
 
-  // Mutation implementation.
-  handler: async (ctx, args) => {
-    //// Insert or modify documents in the database here.
-    //// Mutations can also read from the database like queries.
-    //// See https://docs.convex.dev/database/writing-data.
+    // Patch prerequisites now that ids exist
+    await ctx.db.patch(basicCuts, { prerequisites: [knifeSafety] });
+    await ctx.db.patch(measuring, { prerequisites: [knifeSafety] });
+    await ctx.db.patch(saltSeasoning, { prerequisites: [basicCuts, measuring] });
+    await ctx.db.patch(heatControl, { prerequisites: [basicCuts, measuring] });
+    await ctx.db.patch(simpleSoup, { prerequisites: [basicCuts, measuring] });
+    await ctx.db.patch(greatness, { prerequisites: [simpleSoup, measuring] });
 
-    const id = await ctx.db.insert("numbers", { value: args.value });
+    // Insert lesson contents
+    const insertContent = async (
+      title: string,
+      emoji: string,
+      heading: string,
+      description: string,
+      steps: Array<string>,
+      hints: Array<string>,
+    ) => {
+      const qid = questIdByTitle[title];
+      await ctx.db.insert("lessonContents", {
+        questId: qid,
+        emoji,
+        heading,
+        description,
+        steps,
+        hints,
+      });
+    };
 
-    console.log("Added new document with id:", id);
-    // Optionally, return a value from your mutation.
-    // return id;
-  },
-});
+    await insertContent(
+      "Knife Safety",
+      "🔪",
+      "Knife Safety First",
+      "Keep blades sharp, use a stable board, and practice claw grip.",
+      [
+        "Choose the right knife for the task (chef's, paring, serrated).",
+        "Stabilize your board with a damp towel underneath.",
+        "Use the claw grip: tuck fingertips, guide with knuckles.",
+        "Always slice away from your body and keep the tip anchored for mincing.",
+        "Store knives safely and wash immediately after use.",
+      ],
+      [
+        "A sharp knife is safer than a dull one.",
+        "Dry your hands and handle before cutting.",
+        "Stand square to the board for control.",
+      ],
+    );
 
-// You can fetch data from and send data to third-party APIs via an action:
-export const myAction = action({
-  // Validators for arguments.
-  args: {
-    first: v.number(),
-    second: v.string(),
-  },
+    await insertContent(
+      "Basic Cuts",
+      "🥕",
+      "Master Basic Cuts",
+      "Uniform cuts ensure even cooking and professional presentation.",
+      [
+        "Learn batonnet and julienne: long even matchsticks.",
+        "Practice small/medium/large dice from planks and sticks.",
+        "Chiffonade leafy herbs by rolling into a tight cigar.",
+        "Mince garlic by rocking the knife with the tip anchored.",
+        "Measure consistency by lining pieces side-by-side.",
+      ],
+      [
+        "Square off vegetables first to create flat, stable sides.",
+        "Use your non-dominant hand as a guide fence.",
+        "Let the knife do the work—avoid pressing down.",
+      ],
+    );
 
-  // Action implementation.
-  handler: async (ctx, args) => {
-    //// Use the browser-like `fetch` API to send HTTP requests.
-    //// See https://docs.convex.dev/functions/actions#calling-third-party-apis-and-using-npm-packages.
-    // const response = await ctx.fetch("https://api.thirdpartyservice.com");
-    // const data = await response.json();
+    await insertContent(
+      "Measuring",
+      "⚖️",
+      "Measure for Success",
+      "Accurate measurement improves consistency, especially in baking.",
+      [
+        "Use a digital scale for dry ingredients when possible.",
+        "Level off flour; don't pack unless specified.",
+        "Use liquid cups at eye level for wet ingredients.",
+        "Mind teaspoon vs tablespoon and metric vs imperial.",
+      ],
+      ["Zero your scale with the bowl on it.", "Keep conversion chart handy."],
+    );
 
-    //// Query data by running Convex queries.
-    const data = await ctx.runQuery(api.myFunctions.listNumbers, {
-      count: 10,
-    });
-    console.log(data);
+    await insertContent(
+      "Salt & Seasoning",
+      "🧂",
+      "Season with Confidence",
+      "Salt enhances flavor, balances bitterness, and draws out moisture.",
+      [
+        "Season in layers: during prep, cooking, and finishing.",
+        "Taste as you go—adjust gradually.",
+        "Use kosher salt for control; finish with flaky salt.",
+        "Balance with acid, fat, and sweetness.",
+      ],
+      ["If it's flat, add acid before more salt.", "Bloom spices in fat for depth."],
+    );
 
-    //// Write data by running Convex mutations.
-    await ctx.runMutation(api.myFunctions.addNumber, {
-      value: args.first,
-    });
+    await insertContent(
+      "Heat Control",
+      "🔥",
+      "Master Heat",
+      "Control heat to build texture and flavor without burning.",
+      [
+        "Preheat pans; add oil just before ingredients.",
+        "Use medium-high for searing, medium for sautéing, low for simmering.",
+        "Crowding lowers temperature—cook in batches.",
+        "Rest proteins to redistribute juices.",
+      ],
+      ["If smoking, reduce heat and deglaze.", "Listen: sizzling guides your heat level."],
+    );
+
+    await insertContent(
+      "Simple Soup",
+      "🥣",
+      "Build a Simple Soup",
+      "Use aromatics, stock, and seasonal vegetables for a satisfying bowl.",
+      [
+        "Sweat onions, carrots, celery with salt.",
+        "Add garlic and spices; bloom briefly.",
+        "Pour in stock; simmer until tender.",
+        "Adjust seasoning; add acid and herbs to finish.",
+      ],
+      ["For body, puree a portion and return.", "Finish with olive oil or yogurt."],
+    );
+
+    await insertContent(
+      "GREATNESS",
+      "✨",
+      "Path to Greatness",
+      "Combine fundamentals into composed dishes with precision.",
+      [
+        "Plan mise en place and timing across components.",
+        "Execute techniques: sear, sauce, season, and garnish.",
+        "Plate with color, height, and negative space.",
+      ],
+      ["Keep notes; iterate on balance and texture.", "Seek feedback and refine."],
+    );
+
+    return { inserted: 7 };
   },
 });

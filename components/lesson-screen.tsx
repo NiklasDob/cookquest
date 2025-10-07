@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { X } from "lucide-react"
-import { useState } from "react"
+import { useState, useMemo } from "react"
 // import { LessonContent } from "./lesson-content" // We'll extract the content logic for cleanliness
 
 interface LessonScreenProps {
@@ -76,6 +76,9 @@ export function LessonScreen({ lesson, onComplete, onBack }: LessonScreenProps) 
 // `components/lesson-content.tsx`
 
 import { Lightbulb, RotateCcw } from "lucide-react"
+import { useQuery } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import { Id } from "@/convex/_generated/dataModel"
 
 // Define props for the new component
 interface LessonContentProps {
@@ -86,18 +89,12 @@ interface LessonContentProps {
 }
 
 export function LessonContent({ lesson, onNext, currentStep, totalSteps }: LessonContentProps) {
-  
-  // Your getLessonContent function can live here
-  const getLessonContent = () => {
-    if (lesson.title.includes("Salt")) return { emoji: "🧂", heading: "Understanding Salt", description: "Salt enhances flavors and balances sweetness. Add it gradually and taste as you go. Different salts have different intensities." }
-    if (lesson.title.includes("Heat")) return { emoji: "🔥", heading: "Mastering Heat Control", description: "Low heat for gentle cooking, medium for sautéing, high heat for searing. The pan should be hot before adding ingredients." }
-    if (lesson.title.includes("French")) return { emoji: "🇫🇷", heading: "French Cooking Basics", description: "French cuisine emphasizes technique, quality ingredients, and classic preparations. Master the fundamentals first." }
-    if (lesson.title.includes("Asian")) return { emoji: "🥢", heading: "Asian Cooking Fundamentals", description: "Balance is key: sweet, salty, sour, bitter, and umami. High heat and quick cooking preserve texture and nutrients." }
-    if (lesson.title.includes("Knife")) return { emoji: "🔪", heading: "Knife Safety First", description: "Always cut away from your body. Keep your knives sharp - a dull knife is more dangerous. Use a stable cutting board." }
-    if (lesson.title.includes("Cuts")) return { emoji: "🥕", heading: "Master Basic Cuts", description: "Learn dice, julienne, and chiffonade. Uniform cuts ensure even cooking. Practice makes perfect!" }
-    return { emoji: "👨‍🍳", heading: lesson.title, description: "Master this essential cooking skill to progress on your culinary journey." }
-  }
-  const content = getLessonContent();
+  // Fetch lesson content from Convex by title -> first find quest
+  const quests = useQuery(api.myFunctions.listQuests);
+  const quest = useMemo(() => (quests ?? []).find(q => q.title === lesson.title) as
+    | { _id: Id<"quests">; title: string }
+    | undefined, [quests, lesson.title]);
+  const content = useQuery(api.myFunctions.getLessonContentByQuest, quest ? { questId: quest._id } : "skip");
 
   return (
     <>
@@ -106,14 +103,21 @@ export function LessonContent({ lesson, onNext, currentStep, totalSteps }: Lesso
         <div className="mb-6 flex justify-center">
           <div className="flex h-48 w-48 items-center justify-center rounded-2xl border-2 border-[var(--game-yellow)]/20 bg-gradient-to-br from-[var(--game-yellow)]/10 to-transparent shadow-inner">
             <div className="text-center">
-              <div className="mb-2 text-7xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">{content.emoji}</div>
+              <div className="mb-2 text-7xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">{content?.emoji ?? "👨‍🍳"}</div>
             </div>
           </div>
         </div>
 
         <div className="text-center">
-          <h3 className="mb-3 text-3xl font-bold text-white">{content.heading}</h3>
-          <p className="text-pretty text-lg text-muted-foreground">{content.description}</p>
+          <h3 className="mb-3 text-3xl font-bold text-white">{content?.heading ?? lesson.title}</h3>
+          <p className="text-pretty text-lg text-muted-foreground">{content?.description ?? "Master this essential cooking skill to progress on your culinary journey."}</p>
+          {content && content.steps?.length > 0 && (
+            <ul className="mt-4 text-left text-base text-muted-foreground list-disc list-inside space-y-1">
+              {content.steps.map((s: string, i: number) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 

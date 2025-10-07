@@ -2,14 +2,14 @@
 
 import { memo } from "react"
 // Changed: Import from '@xyflow/react'
-import { Handle, Position, NodeProps } from '@xyflow/react'; 
+import { Handle, Position } from '@xyflow/react'; 
 import { Star, Lock, Crown, ChefHat, Flame, Sparkles, Globe, Wine, UtensilsCrossed } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
 // The QuestNodeData interface is unchanged
 export interface QuestNodeData {
-  id: number
+  id: string
   title: string
   type: "lesson" | "challenge" | "boss" | "concept"
   category: "foundation" | "technique" | "flavor" | "cuisine" | "advanced"
@@ -17,7 +17,7 @@ export interface QuestNodeData {
   status: "locked" | "available" | "completed"
   stars: number
   maxStars: 3
-  prerequisites: number[]
+  prerequisites: string[]
   onClick: (node: QuestNodeData) => void
 }
 
@@ -36,7 +36,7 @@ function getNodeIcon(node: QuestNodeData) {
 }
 
 // The custom node component itself is unchanged
-const QuestNode = memo(({ data }: NodeProps<QuestNodeData>) => {
+const QuestNode = memo(({ data }: { data: QuestNodeData }) => {
   const isDisabled = data.status === "locked"
   let iconColor = "var(--muted-foreground)"
   if (data.status === "completed") iconColor = "var(--game-green)"
