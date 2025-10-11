@@ -67,7 +67,7 @@ export function MinigameScreen({ questId, onComplete, onBack, userId }: Minigame
       } else {
         handleGameComplete(nextAnswers)
       }
-    }, 100) 
+    }, 1200) 
   }
 
   const handleGameComplete = (answers: Record<number, any>) => {

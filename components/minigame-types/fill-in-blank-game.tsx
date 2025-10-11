@@ -37,13 +37,11 @@ export function FillInBlankGame({ question, onAnswer }: FillInBlankGameProps) {
       d.toLowerCase() !== primaryCorrectAnswer.toLowerCase()
     )
     
-    // Shuffle and take 3-4 distractors
     const shuffledDistractors = availableDistractors.sort(() => Math.random() - 0.5)
     options.push(...shuffledDistractors.slice(0, 4))
     
-    // Shuffle all options
     return options.sort(() => Math.random() - 0.5)
-  }, [correctAnswers]) // Only recalculate when correctAnswers change
+  }, [correctAnswers]) 
 
   const handleAnswerSelect = (answer: string) => {
     if (!submitted) {
