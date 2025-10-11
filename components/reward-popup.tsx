@@ -7,9 +7,12 @@ import { useEffect, useState } from "react"
 
 interface RewardPopupProps {
   onClose: () => void
+  xp: number
+  badge: string
 }
 
-export function RewardPopup({ onClose }: RewardPopupProps) {
+export function RewardPopup({ onClose, xp, badge }: RewardPopupProps) {
+
   const [show, setShow] = useState(false)
 
   useEffect(() => {
@@ -63,13 +66,13 @@ export function RewardPopup({ onClose }: RewardPopupProps) {
           <div className="my-4 w-full space-y-3">
             <div className="rounded-xl bg-black/20 p-3">
               <p className="text-sm font-medium uppercase tracking-wider text-muted-foreground">XP Gained</p>
-              <p className="text-3xl font-bold text-[var(--game-green)] drop-shadow-md">+50 XP</p>
+              <p className="text-3xl font-bold text-[var(--game-green)] drop-shadow-md">+{xp} XP</p>
             </div>
 
             <div className="rounded-xl bg-black/20 p-3">
               <p className="text-sm font-medium uppercase tracking-wider text-muted-foreground">Badge Unlocked</p>
               <p className="text-2xl font-bold text-[var(--game-terracotta)] drop-shadow-md">
-                🏆 Chopping Master
+                {badge}
               </p>
             </div>
           </div>

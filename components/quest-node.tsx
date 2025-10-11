@@ -18,6 +18,8 @@ export interface QuestNodeData {
   maxStars: 3
   prerequisites: string[]
   onClick: (node: QuestNodeData) => void
+  badge: string
+  xp: number
 }
 
 function getNodeIcon(node: QuestNodeData) {

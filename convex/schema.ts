@@ -29,6 +29,8 @@ export default defineSchema({
     stars: v.number(),
     maxStars: v.number(),
     prerequisites: v.array(v.id("quests")),
+    badge: v.optional(v.string()),
+    xp: v.optional(v.number()),
   })
     .index("by_status", ["status"]) // convenience
     .index("by_title", ["title"]),

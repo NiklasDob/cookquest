@@ -56,6 +56,10 @@ export function MatchingGame({ question, onAnswer }: MatchingGameProps) {
     setCompletedRight(prev => new Set([...prev, rightIndex]))
     setSelectedLeft(null)
     setSelectedRight(null)
+    console.log("newMatch", newMatch)
+    console.log("matches", matches)
+    console.log("leftItems", leftItems)
+    console.log("rightItems", rightItems)
 
     // Check if all items are matched
     if (matches.length + 1 === leftItems.length) {

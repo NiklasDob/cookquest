@@ -43,6 +43,11 @@ export function LessonScreen({ lesson, onComplete, onBack, userId = "default-use
       }
     }
   }
+  const handleBack = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1)
+    }
+  }
 
   const handleMinigameComplete = (passed: boolean, score: number) => {
     setShowMinigame(false)
@@ -121,7 +126,7 @@ export function LessonScreen({ lesson, onComplete, onBack, userId = "default-use
             )}
 
             {/* Lesson Content and Buttons are passed into a separate component for readability */}
-            <LessonContent lesson={lesson} onNext={handleNext} content={content} currentStep={currentStep} totalSteps={totalSteps} />
+            <LessonContent lesson={lesson} onNext={handleNext} onBack={handleBack} content={content} currentStep={currentStep} totalSteps={totalSteps} />
         </div>
       </Card>
     </div>
@@ -138,6 +143,7 @@ import { Lightbulb, RotateCcw } from "lucide-react"
 interface LessonContentProps {
   lesson: { id: string; title: string };
   onNext: () => void;
+  onBack: () => void;
   content?: {
     _id: Id<"lessonContents">;
     _creationTime: number;
@@ -152,7 +158,7 @@ interface LessonContentProps {
   totalSteps: number;
 }
 
-export function LessonContent({ lesson, onNext, content, currentStep, totalSteps }: LessonContentProps) {
+export function LessonContent({ lesson, onNext, onBack, content, currentStep, totalSteps }: LessonContentProps) {
   
   const effectiveSteps = content?.steps ?? [];
   
@@ -179,24 +185,28 @@ export function LessonContent({ lesson, onNext, content, currentStep, totalSteps
 
       {/* Action Buttons */}
       <div className="grid grid-cols-2 gap-4">
-        <Button variant="outline" size="lg" className="h-12 border-b-4 border-gray-700 bg-gray-800/80 text-base font-bold text-muted-foreground transition-transform hover:bg-gray-800/100 active:translate-y-0.5 active:border-b-2">
-          <Lightbulb className="mr-2 h-5 w-5" />
-          Hint
+      
+        <Button
+          // size="lg"
+          disabled={currentStep === 1}
+          className="mt-6 h-16 w-full rounded-xl border-b-4 border-green-900 bg-[var(--game-orange)] text-xl font-bold text-black shadow-lg shadow-[var(--game-orange)]/20 transition-all duration-100 ease-out hover:bg-[var(--game-yellow)] hover:shadow-[var(--game-yellow)]/30 active:translate-y-0.5 active:border-b-2"
+          onClick={onBack}
+        >
+          Back
         </Button>
-        <Button variant="outline" size="lg" className="h-12 border-b-4 border-gray-700 bg-gray-800/80 text-base font-bold text-muted-foreground transition-transform hover:bg-gray-800/100 active:translate-y-0.5 active:border-b-2">
-          <RotateCcw className="mr-2 h-5 w-5" />
-          Retry
-        </Button>
-      </div>
 
-      {/* Main "Continue" Button */}
-      <Button
-        size="lg"
+        <Button
+        // size="lg"
         className="mt-6 h-16 w-full rounded-xl border-b-4 border-green-900 bg-[var(--game-green)] text-xl font-bold text-black shadow-lg shadow-[var(--game-green)]/20 transition-all duration-100 ease-out hover:bg-[var(--game-yellow)] hover:shadow-[var(--game-yellow)]/30 active:translate-y-0.5 active:border-b-2"
         onClick={onNext}
       >
         {currentStep === totalSteps ? "Complete Lesson ✨" : "Continue"}
       </Button>
+      </div>
+
+      {/* Main "Continue" Button */}
+
+     
     </>
   )
 }

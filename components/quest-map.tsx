@@ -36,6 +36,8 @@ interface Quest {
   stars: number
   maxStars: number
   prerequisites: Array<Id<"quests">>
+  badge: string
+  xp: number
 }
 
 const nodeTypes = { questNode: QuestNodeComponent } as unknown as NodeTypes;
@@ -64,7 +66,7 @@ const QuestFlow = () => {
 
   const [questData, setQuestData] = useState<Quest[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<QuestNodeData | null>(null);
-  const [showReward, setShowReward] = useState(false);
+  const [showReward, setShowReward] = useState<QuestNodeData | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
@@ -89,7 +91,6 @@ const QuestFlow = () => {
     setQuestData(convexQuests);
   }, [convexQuests, seed]);
 
-  // 1. Calculate the stable layout from current data
   const stableLayout = useMemo(() => {
     const allNodes: Array<Node> = questData.map(quest => ({
       id: String(quest._id),
@@ -175,27 +176,16 @@ const QuestFlow = () => {
     if (completed) {
       completeQuest({ questId: completed._id, stars: 3 }).catch(() => undefined);
     }
-    // Optimistic UI update: mark current as completed and unlock dependents
-    // const completedId = completed?._id;
-    // const optimistic = questData.map((node) =>
-    //   node._id === completedId ? { ...node, status: "completed" as const, stars: 3 } : node
-    // );
-    // const unlocked = optimistic.map((node) => {
-    //   if (node.status === "locked") {
-    //     const allPrereqsCompleted = node.prerequisites.every((prereqId) =>
-    //       optimistic.find((n) => String(n._id) === String(prereqId))?.status === "completed"
-    //     );
-    //     if (allPrereqsCompleted) return { ...node, status: "available" as const };
-    //   }
-    //   return node;
-    // });
-    // setQuestData(unlocked);
+    
     setSelectedLesson(null);
-    setShowReward(true);
+    setShowReward(selectedLesson);
   };
 
   if (selectedLesson) {
-    return <LessonScreen lesson={{ id: selectedLesson.id, title: selectedLesson.title }} onComplete={handleLessonComplete} onBack={() => setSelectedLesson(null)} userId="default-user" />;
+    return <>
+    <LessonScreen lesson={{ id: selectedLesson.id, title: selectedLesson.title }} onComplete={handleLessonComplete} onBack={() => setSelectedLesson(null)} userId="default-user" />;
+    
+    </>
   }
 
   return (
@@ -219,7 +209,8 @@ const QuestFlow = () => {
           </button>
         </Panel>
       </ReactFlow>
-      {showReward && <RewardPopup onClose={() => setShowReward(false)} />}
+    {showReward && showReward.badge && <RewardPopup onClose={() => setShowReward(null)} badge={showReward?.badge} xp={showReward?.xp} />}
+
     </div>
   );
 };

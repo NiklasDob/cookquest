@@ -76,31 +76,33 @@ export function MinigameScreen({ questId, onComplete, onBack, userId }: Minigame
     
     // Calculate score
     let correctAnswers = 0
-   
-    // questions?.forEach((question, index) => {
-    //   totalPoints += question.points
-    //   const userAnswer = answers[index]
-      
-    //   if (isAnswerCorrect(question, userAnswer)) {
-    //     correctAnswers++
-    //     earnedPoints += question.points
-    //   }
-    // })
-    if(!questions) {
-      return
-    }
     let totalPoints = 0
     let earnedPoints = 0
-    console.log("answers", answers) 
-    for(const question of questions) {
-      console.log("question", question)
-      if(isAnswerCorrect(question, answers[totalPoints])) {
-        earnedPoints += 1
-        console.log("earnedPoints", earnedPoints)
+   
+    questions?.forEach((question, index) => {
+      totalPoints += question.points
+      const userAnswer = answers[index]
+      
+      if (isAnswerCorrect(question, userAnswer)) {
+        correctAnswers++
+        earnedPoints += question.points
       }
-      totalPoints += 1
-      console.log("totalPoints", totalPoints)
-    }
+    })
+    // if(!questions) {
+    //   return
+    // }
+    // let totalPoints = 0
+    // let earnedPoints = 0
+    // console.log("answers", answers) 
+    // for(const question of questions) {
+    //   console.log("question", question)
+    //   if(isAnswerCorrect(question, answers[totalPoints])) {
+    //     earnedPoints += 1
+    //     console.log("earnedPoints", earnedPoints)
+    //   }
+    //   totalPoints += 1
+    //   console.log("totalPoints", totalPoints)
+    // }
 
     const finalScore = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0
     setScore(finalScore)
