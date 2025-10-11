@@ -53,20 +53,24 @@ export function MinigameScreen({ questId, onComplete, onBack, userId }: Minigame
     return () => clearInterval(timer)
   }, [gameStarted, minigame?.timeLimit, gameCompleted])
 
+
+
   const handleAnswer = (questionIndex: number, answer: any) => {
-    setAnswers(prev => ({ ...prev, [questionIndex]: answer }))
+    const nextAnswers = { ...answers, [questionIndex]: answer }
+    setAnswers(nextAnswers)
+    // setAnswers(prev => ({ ...prev, [questionIndex]: answer }))
     
     // Add a small delay to show feedback before moving to next question
     setTimeout(() => {
       if (questionIndex < (questions?.length ?? 0) - 1) {
         setCurrentQuestionIndex(questionIndex + 1)
       } else {
-        handleGameComplete()
+        handleGameComplete(nextAnswers)
       }
-    }, 100) // 2 second delay to show feedback
+    }, 100) 
   }
 
-  const handleGameComplete = () => {
+  const handleGameComplete = (answers: Record<number, any>) => {
     if (gameCompleted) return
     setGameCompleted(true)
     
