@@ -195,7 +195,7 @@ const QuestFlow = () => {
   };
 
   if (selectedLesson) {
-    return <LessonScreen lesson={{ id: selectedLesson.id, title: selectedLesson.title }} onComplete={handleLessonComplete} onBack={() => setSelectedLesson(null)} />;
+    return <LessonScreen lesson={{ id: selectedLesson.id, title: selectedLesson.title }} onComplete={handleLessonComplete} onBack={() => setSelectedLesson(null)} userId="default-user" />;
   }
 
   return (

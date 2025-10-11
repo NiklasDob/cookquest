@@ -7,7 +7,6 @@ import { Star, Lock, Crown, ChefHat, Flame, Sparkles, Globe, Wine, UtensilsCross
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
-// The QuestNodeData interface is unchanged
 export interface QuestNodeData {
   id: string
   title: string
@@ -21,7 +20,6 @@ export interface QuestNodeData {
   onClick: (node: QuestNodeData) => void
 }
 
-// Icon helper function is unchanged
 function getNodeIcon(node: QuestNodeData) {
   if (node.status === "locked") return <Lock className="h-8 w-8 text-muted-foreground/50" />
   if (node.type === "boss") return <Crown className="h-10 w-10" />
@@ -35,7 +33,6 @@ function getNodeIcon(node: QuestNodeData) {
   return <ChefHat className="h-8 w-8" />
 }
 
-// The custom node component itself is unchanged
 const QuestNode = memo(({ data }: { data: QuestNodeData }) => {
   const isDisabled = data.status === "locked"
   let iconColor = "var(--muted-foreground)"

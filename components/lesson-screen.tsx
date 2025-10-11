@@ -2,11 +2,12 @@
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { X } from "lucide-react"
+import { X, Gamepad2 } from "lucide-react"
 import { useState } from "react"
 import { useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
+import { MinigameScreen } from "./minigame-screen"
 // import { LessonContent } from "./lesson-content" // We'll extract the content logic for cleanliness
 
 interface LessonScreenProps {
@@ -17,20 +18,51 @@ interface LessonScreenProps {
   }
   onComplete: () => void
   onBack: () => void
+  userId?: string
 }
 
-export function LessonScreen({ lesson, onComplete, onBack }: LessonScreenProps) {
+export function LessonScreen({ lesson, onComplete, onBack, userId = "default-user" }: LessonScreenProps) {
   const [currentStep, setCurrentStep] = useState(1)
+  const [showMinigame, setShowMinigame] = useState(false)
+  const [minigameEnabled, setMinigameEnabled] = useState(true)
+  
   // Fetch content to derive total steps dynamically
   const content = useQuery(api.myFunctions.getLessonContentByQuest, { questId: lesson.id as unknown as Id<"quests"> })
+  const minigame = useQuery(api.myFunctions.getMinigameByQuest, { questId: lesson.id as unknown as Id<"quests"> })
   const totalSteps = Math.max(1, (content?.steps?.length ?? 1))
 
   const handleNext = () => {
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1)
     } else {
-      onComplete()
+      // Check if minigame should be shown
+      if (minigameEnabled && minigame?.enabled) {
+        setShowMinigame(true)
+      } else {
+        onComplete()
+      }
     }
+  }
+
+  const handleMinigameComplete = (passed: boolean, score: number) => {
+    setShowMinigame(false)
+    onComplete()
+  }
+
+  const handleMinigameBack = () => {
+    setShowMinigame(false)
+  }
+
+  // Show minigame if it should be displayed
+  if (showMinigame && minigame) {
+    return (
+      <MinigameScreen
+        questId={lesson.id as unknown as Id<"quests">}
+        onComplete={handleMinigameComplete}
+        onBack={handleMinigameBack}
+        userId={userId}
+      />
+    )
   }
 
   return (
@@ -68,6 +100,25 @@ export function LessonScreen({ lesson, onComplete, onBack }: LessonScreenProps) 
                 style={{ width: `${(currentStep / totalSteps) * 100}%` }}
               />
             </div>
+
+            {/* Minigame Toggle */}
+            {minigame && (
+              <div className="mb-4 flex items-center justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMinigameEnabled(!minigameEnabled)}
+                  className={`flex items-center gap-2 ${
+                    minigameEnabled 
+                      ? "border-[var(--game-green)] bg-[var(--game-green)]/10 text-[var(--game-green)]" 
+                      : "border-muted-foreground bg-muted/10 text-muted-foreground"
+                  }`}
+                >
+                  <Gamepad2 className="h-4 w-4" />
+                  {minigameEnabled ? "Minigame Enabled" : "Minigame Disabled"}
+                </Button>
+              </div>
+            )}
 
             {/* Lesson Content and Buttons are passed into a separate component for readability */}
             <LessonContent lesson={lesson} onNext={handleNext} content={content} currentStep={currentStep} totalSteps={totalSteps} />
