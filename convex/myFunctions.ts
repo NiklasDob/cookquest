@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, action, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 
 // Queries
 export const listQuests = query({
@@ -95,7 +96,12 @@ export const getLessonContentByQuest = query({
       emoji: v.string(),
       heading: v.string(),
       description: v.string(),
-      steps: v.array(v.string()),
+      steps: v.array(
+        v.object({
+          text: v.string(),
+          imageId: v.optional(v.id("_storage")), 
+        }),
+      ),
       hints: v.array(v.string()),
     }),
     v.null(),
@@ -311,11 +317,26 @@ export const completeQuestAndUnlockDependents = mutation({
   },
 });
 
-export const seedLessons = mutation({
-  args: {},
-  returns: v.object({ inserted: v.number() }),
+export const generateUploadUrl = mutation({
   handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const updateSeeds = mutation({
+  args: {uploadedImages: v.object({"knife_cuts": v.array(v.id("_storage"))}) },
+  handler: async (ctx, args) : Promise<{inserted: number}> => {
+    return await ctx.runMutation(internal.myFunctions.seedLessons, args);
+  },
+});
+
+export const seedLessons = internalMutation({
+  args: {uploadedImages: v.object({"knife_cuts": v.array(v.id("_storage"))}) },
+  returns: v.object({ inserted: v.number() }),
+  handler: async (ctx, args) => {
+    const {uploadedImages} = args
     // Avoid duplicate seeding
+    
     const existing = await ctx.db.query("quests").take(1);
     if (existing.length > 0) return { inserted: 0 };
 
@@ -606,16 +627,26 @@ export const seedLessons = mutation({
       emoji: string,
       heading: string,
       description: string,
+      // steps: Array<Record<string, Id<"_storage">>>,
+      // steps: Array<{text: string, imageId? : Id<"_storage">}>,
       steps: Array<string>,
       hints: Array<string>,
+      stepImages? : Array<Id<"_storage">>
     ) => {
       const qid = questIdByTitle[title];
+      const newSteps :  Array<{text: string, imageId? : Id<"_storage">}> = steps.map((s : string, i : number) => {
+        if(stepImages && stepImages.length === steps.length){
+          return {text: s, imageId: stepImages[i]}
+        }else{
+          return {text: s}
+        }
+      })
       await ctx.db.insert("lessonContents", {
         questId: qid,
         emoji,
         heading,
         description,
-        steps,
+        steps: newSteps,
         hints,
       });
     };
@@ -651,6 +682,8 @@ export const seedLessons = mutation({
       ],
       ["When in doubt, throw it out.", "Hot, soapy water is your best friend."],
     );
+
+
     await insertContent(
       "Basic Cuts",
       "🥕",
@@ -667,6 +700,7 @@ export const seedLessons = mutation({
         "Create a flat, stable surface by slicing a small piece off one side of round vegetables.",
         "Let the weight of the knife do the work; don't force it.",
       ],
+      uploadedImages["knife_cuts"]
     );
     await insertContent(
       "Measuring 101",

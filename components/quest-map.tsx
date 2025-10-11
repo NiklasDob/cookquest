@@ -22,7 +22,7 @@ import { LessonScreen } from "@/components/lesson-screen";
 import { RewardPopup } from "@/components/reward-popup";
 import QuestNodeComponent, { QuestNodeData } from "./quest-node";
 import { api } from "@/convex/_generated/api";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { Id } from "@/convex/_generated/dataModel";
 
 // --- The Quest interface mirrors the DB ---
@@ -69,7 +69,52 @@ const QuestFlow = () => {
   const convexQuests = useQuery(api.myFunctions.listQuests) as
     | Array<Quest>
     | undefined;
-  const seed = useMutation(api.myFunctions.seedLessons);
+  
+  // const seed = useAction(api.actions.seedFilesAction)
+  // const seed = useMutation(api.myFunctions.seedLessons);
+  const generateUploadUrl = useMutation(api.myFunctions.generateUploadUrl);
+  const seed = useMutation(api.myFunctions.updateSeeds);
+  
+  // const seedDB = async () => {
+  //   const cutImageNames = [
+  //             "images/dice.png",
+  //             "images/julienne.png",
+  //             "images/mince.png",
+  //             "images/slice.png",
+  //             "images/chiffonade.png",
+  //           ];
+    
+
+  //   let imageIdsPromise  = cutImageNames.map(async (fname) => {
+  //     const im = await fetch(fname);
+  //     const blob = await im.blob()
+
+  //     const postUrl = await generateUploadUrl();
+  //     // Step 2: POST the file to the URL
+  //     const result = await fetch(postUrl, {
+  //       method: "POST",
+  //       headers: { "Content-Type": blob.type },
+  //       body: blob,
+  //     });
+  //     const { storageId } = await result.json();
+  //     return storageId as string
+  //   })
+
+  //   const imageIds  = await Promise.all(imageIdsPromise)
+  //   console.log(imageIds)
+  //   await seed({uploadedImages: {knife_cuts: imageIds as Array<Id<"_storage">>}})
+  // };
+  const seedDB = async () => {}
+  useEffect( () => {
+
+    
+    seedDB().then(() => console.log("Uploaded files")).catch((e) => console.log("Error uploading files" + e))
+  
+  }, [])
+  // useEffect(() => {
+    
+  // }, [seed])
+
   const completeQuest = useMutation(
     api.myFunctions.completeQuestAndUnlockDependents,
   );
@@ -97,7 +142,7 @@ const QuestFlow = () => {
   useEffect(() => {
     if (convexQuests === undefined) return;
     if (convexQuests.length === 0) {
-      seed({}).catch(() => undefined);
+      seedDB().catch(() => undefined);
       return;
     }
     setQuestData(convexQuests);

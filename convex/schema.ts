@@ -40,7 +40,12 @@ export default defineSchema({
     emoji: v.string(),
     heading: v.string(),
     description: v.string(),
-    steps: v.array(v.string()),
+    steps: v.array(
+      v.object({
+        text: v.string(),
+        imageId: v.optional(v.id("_storage")), 
+      }),
+    ),
     hints: v.array(v.string()),
   }).index("by_quest", ["questId"]),
 
