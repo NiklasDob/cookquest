@@ -317,6 +317,16 @@ export const completeQuestAndUnlockDependents = mutation({
   },
 });
 
+export const getImageUrlById =query({
+  args: {ids: v.array(v.id("_storage"))},
+  handler: async (ctx, args) => {
+      const {ids} = args;
+      if(!ids) {return [];}
+      const promises = ids.map((id) =>  ctx.storage.getUrl(id))
+      return await Promise.all(promises)
+  },
+});
+
 export const generateUploadUrl = mutation({
   handler: async (ctx) => {
     return await ctx.storage.generateUploadUrl();

@@ -151,7 +151,7 @@ interface LessonContentProps {
     emoji: string;
     heading: string;
     description: string;
-    steps: string[];
+    steps: Array<{text: string, imageId?: string}>;
     hints: string[];
   } | null;
   currentStep: number;
@@ -161,7 +161,8 @@ interface LessonContentProps {
 export function LessonContent({ lesson, onNext, onBack, content, currentStep, totalSteps }: LessonContentProps) {
   
   const effectiveSteps = content?.steps ?? [];
-  
+  const getImageUrlById = useQuery(api.myFunctions.getImageUrlById, {ids : content?.steps.map((o) => o.imageId ).filter((v) => v) as Array<Id<"_storage">>})
+  // console.log(getImageUrlById)
   return (
     <>
       {/* Main Content Area */}
@@ -169,7 +170,9 @@ export function LessonContent({ lesson, onNext, onBack, content, currentStep, to
         <div className="mb-6 flex justify-center">
           <div className="flex h-48 w-48 items-center justify-center rounded-2xl border-2 border-[var(--game-yellow)]/20 bg-gradient-to-br from-[var(--game-yellow)]/10 to-transparent shadow-inner">
             <div className="text-center">
-              <div className="mb-2 text-7xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">{content?.emoji ?? "👨‍🍳"}</div>
+              {(getImageUrlById && getImageUrlById.length > 0) ? <div className="mb-2 text-7xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]"><img src={getImageUrlById[currentStep-1] ?? ""} /> </div> :  <div className="mb-2 text-7xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">{content?.emoji ?? "👨‍🍳"}</div>   }
+              
+              
             </div>
           </div>
         </div>
@@ -177,7 +180,7 @@ export function LessonContent({ lesson, onNext, onBack, content, currentStep, to
         <div className="text-center">
           <h3 className="mb-3 text-3xl font-bold text-white">{content?.heading ?? lesson.title}</h3>
           <p className="text-pretty text-base text-muted-foreground">{content?.description ?? "Master this essential cooking skill to progress on your culinary journey."}</p>
-          <p className="mt-3 text-pretty text-2xl font-semibold text-white">{effectiveSteps[currentStep - 1]}</p>
+          <p className="mt-3 text-pretty text-2xl font-semibold text-white">{effectiveSteps[currentStep - 1]?.text}</p>
         
          
         </div>
