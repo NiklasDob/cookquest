@@ -170,7 +170,7 @@ export function LessonContent({ lesson, onNext, onBack, content, currentStep, to
         <div className="mb-6 flex justify-center">
           <div className="flex h-48 w-48 items-center justify-center rounded-2xl border-2 border-[var(--game-yellow)]/20 bg-gradient-to-br from-[var(--game-yellow)]/10 to-transparent shadow-inner">
             <div className="text-center">
-              {(getImageUrlById && getImageUrlById.length > 0) ? <div className="mb-2 text-7xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]"><img src={getImageUrlById[currentStep-1] ?? ""} /> </div> :  <div className="mb-2 text-7xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">{content?.emoji ?? "👨‍🍳"}</div>   }
+              {(getImageUrlById && getImageUrlById.length > 0) ? <img style={{objectFit: "cover"}} src={getImageUrlById[currentStep-1] ?? ""} /> :  <div className="mb-2 text-7xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">{content?.emoji ?? "👨‍🍳"}</div>   }
               
               
             </div>
