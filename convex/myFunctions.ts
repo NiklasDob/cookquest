@@ -484,7 +484,7 @@ export const seedLessons = mutation({
       "fill-in-blank",
       {
         blankText: "The _____ cut creates cubes of uniform size.",
-        correctAnswers: ["dice", "dicing"],
+        correctAnswers: ["dice"], // Only one correct answer
       },
       "The dice cut is fundamental for even cooking and professional presentation.",
       10,
@@ -496,9 +496,21 @@ export const seedLessons = mutation({
       "fill-in-blank",
       {
         blankText: "_____ involves cutting vegetables into long, thin matchsticks.",
-        correctAnswers: ["julienne", "julienning"],
+        correctAnswers: ["julienne"], // Only one correct answer
       },
       "Julienne cuts are perfect for stir-fries and salads.",
+      10,
+    );
+
+    await insertMinigameQuestion(
+      basicCutsMinigame,
+      "Complete: To _____ means to cut ingredients very finely, like garlic or herbs.",
+      "fill-in-blank",
+      {
+        blankText: "To _____ means to cut ingredients very finely, like garlic or herbs.",
+        correctAnswers: ["mince"], // Only one correct answer
+      },
+      "Mincing creates very small, uniform pieces that distribute flavor evenly.",
       10,
     );
 

@@ -56,11 +56,14 @@ export function MinigameScreen({ questId, onComplete, onBack, userId }: Minigame
   const handleAnswer = (questionIndex: number, answer: any) => {
     setAnswers(prev => ({ ...prev, [questionIndex]: answer }))
     
-    if (questionIndex < (questions?.length ?? 0) - 1) {
-      setCurrentQuestionIndex(questionIndex + 1)
-    } else {
-      handleGameComplete()
-    }
+    // Add a small delay to show feedback before moving to next question
+    setTimeout(() => {
+      if (questionIndex < (questions?.length ?? 0) - 1) {
+        setCurrentQuestionIndex(questionIndex + 1)
+      } else {
+        handleGameComplete()
+      }
+    }, 100) // 2 second delay to show feedback
   }
 
   const handleGameComplete = () => {
@@ -69,18 +72,31 @@ export function MinigameScreen({ questId, onComplete, onBack, userId }: Minigame
     
     // Calculate score
     let correctAnswers = 0
+   
+    // questions?.forEach((question, index) => {
+    //   totalPoints += question.points
+    //   const userAnswer = answers[index]
+      
+    //   if (isAnswerCorrect(question, userAnswer)) {
+    //     correctAnswers++
+    //     earnedPoints += question.points
+    //   }
+    // })
+    if(!questions) {
+      return
+    }
     let totalPoints = 0
     let earnedPoints = 0
-
-    questions?.forEach((question, index) => {
-      totalPoints += question.points
-      const userAnswer = answers[index]
-      
-      if (isAnswerCorrect(question, userAnswer)) {
-        correctAnswers++
-        earnedPoints += question.points
+    console.log("answers", answers) 
+    for(const question of questions) {
+      console.log("question", question)
+      if(isAnswerCorrect(question, answers[totalPoints])) {
+        earnedPoints += 1
+        console.log("earnedPoints", earnedPoints)
       }
-    })
+      totalPoints += 1
+      console.log("totalPoints", totalPoints)
+    }
 
     const finalScore = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0
     setScore(finalScore)
@@ -289,6 +305,7 @@ export function MinigameScreen({ questId, onComplete, onBack, userId }: Minigame
 
           {currentQuestion.questionType === "matching" && (
             <MatchingGame
+              key={`matching-${currentQuestionIndex}`}
               question={currentQuestion}
               onAnswer={(answer) => handleAnswer(currentQuestionIndex, answer)}
             />
@@ -296,6 +313,7 @@ export function MinigameScreen({ questId, onComplete, onBack, userId }: Minigame
 
           {currentQuestion.questionType === "fill-in-blank" && (
             <FillInBlankGame
+              key={`fill-in-blank-${currentQuestionIndex}`}
               question={currentQuestion}
               onAnswer={(answer) => handleAnswer(currentQuestionIndex, answer)}
             />
@@ -303,6 +321,7 @@ export function MinigameScreen({ questId, onComplete, onBack, userId }: Minigame
 
           {currentQuestion.questionType === "multiple-choice" && (
             <MultipleChoiceGame
+              key={`multiple-choice-${currentQuestionIndex}`}
               question={currentQuestion}
               onAnswer={(answer) => handleAnswer(currentQuestionIndex, answer)}
             />
@@ -310,6 +329,7 @@ export function MinigameScreen({ questId, onComplete, onBack, userId }: Minigame
 
           {currentQuestion.questionType === "image-association" && (
             <ImageAssociationGame
+              key={`image-association-${currentQuestionIndex}`}
               question={currentQuestion}
               onAnswer={(answer) => handleAnswer(currentQuestionIndex, answer)}
             />
